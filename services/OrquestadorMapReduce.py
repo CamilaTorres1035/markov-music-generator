@@ -14,7 +14,7 @@ class OrquestadorMapReduce:
         self._client = Client(n_workers=4,dashboard_address=':5847')
         print(f"Dashboard: {self._client.dashboard_link}")
 
-    def ejecutar_map_reduce(self, funcion_map:Callable, funcion_reduce:Callable, funcion_combine:Callable):
+    def ejecutar_map_reduce(self, funcion_map:Callable, funcion_reduce:Callable, funcion_combine:Callable) -> list[DataTransicionAgrupada]:
         ##Paso 1: crear el bag de dask
         bag_inicial = db.from_sequence(self._corpus)
         ##Paso 2: Aplicar Map
