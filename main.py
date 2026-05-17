@@ -19,17 +19,25 @@ def main():
         EventoMusical(NotaMusical(67), 2.0)
     ]
 
+    lista_eventos_prueba2 = [
+        EventoMusical(NotaMusical(60), 0.5),
+        EventoMusical(NotaMusical(62), 0.5),
+        EventoMusical(NotaMusical(64), 1.0),
+        EventoMusical(NotaMusical(65), 0.25),
+        EventoMusical(NotaMusical(67), 2.0)
+    ]
+
     # 3. Empaquetando en la Secuencia (opcional, por si el mapper lo exige así)
     secuencia_prueba = SecuenciaMusical(lista_eventos_prueba)
+    secuencia_prueba2 = SecuenciaMusical(lista_eventos_prueba2)
 
-    # --- Impresión para verificar la estructura ---
-    print("Lista directa para procesar:")
-    for evento in lista_eventos_prueba:
-        print(evento)
+    corpus = [lista_eventos_prueba, lista_eventos_prueba2]
 
-    transformada = MarkovMapper.map_secuencia(secuencia_prueba)
-    print("TRANSFORMACIÓN PARA FASE MAP")
-    print(transformada)
+    orquestador = OrquestadorMapReduce(corpus=corpus)
+    lista = orquestador.ejecutar_map_reduce(MarkovMapper.map_secuencia, MarkovReducer.funcion_reduce)
+    orquestador.cerrar()
+    print(lista)
+
 
 
 if __name__ == "__main__":
