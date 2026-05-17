@@ -1,0 +1,2 @@
+class OrquestadorMapReduce:
+    pass

@@ -2,4 +2,4 @@ from dataclasses import dataclass
 
 @dataclass
 class NotaMusical:
-    _nota: int
+    _nota_midi: int
