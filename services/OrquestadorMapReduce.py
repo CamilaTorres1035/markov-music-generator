@@ -14,7 +14,7 @@ class OrquestadorMapReduce:
         self._client = Client(n_workers=4,dashboard_address=':5847')
         print(f"Dashboard: {self._client.dashboard_link}")
 
-    def ejecutar_map_reduce(self, funcion_map:Callable, funcion_reduce:Callable):
+    def ejecutar_map_reduce(self, funcion_map:Callable, funcion_reduce:Callable, funcion_combine:Callable):
         ##Paso 1: crear el bag de dask
         bag_inicial = db.from_sequence(self._corpus)
         ##Paso 2: Aplicar Map
@@ -23,8 +23,9 @@ class OrquestadorMapReduce:
         ##Paso 3: Shuffle y Reduce
         agrupado = bag_mapeado.foldby(
             key= lambda tupla: tupla[0],
-            initial={},
-            binop=funcion_reduce
+            initial=dict,
+            binop=funcion_reduce,
+            combine=funcion_combine
         )
 
         ##Paso 4: ejecutar MapReduce

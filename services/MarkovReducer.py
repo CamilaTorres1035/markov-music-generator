@@ -13,3 +13,32 @@ class MarkovReducer:
         acumulador[nota_destino]["tiempos"].append(tiempo)
 
         return acumulador
+    
+    @staticmethod
+    def funcion_combine(
+        acumulador1: dict[int, dict[str, int | list]],
+        acumulador2: dict[int, dict[str, int | list]]
+        ) -> dict[int, dict[str, int | list]]:
+
+        resultado = dict(acumulador1)
+
+        for nota_destino, datos in acumulador2.items():
+
+            # Si la transición aún no existe
+            if nota_destino not in resultado:
+
+                resultado[nota_destino] = {
+                    "frecuencia": datos["frecuencia"],
+                    "tiempos": list(datos["tiempos"])
+                }
+
+            # Si ya existe, combinar estadísticas
+            else:
+
+                resultado[nota_destino]["frecuencia"] += datos["frecuencia"]
+
+                resultado[nota_destino]["tiempos"].extend(
+                    datos["tiempos"]
+                )
+
+        return resultado
