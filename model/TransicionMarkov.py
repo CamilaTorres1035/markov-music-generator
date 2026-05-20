@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from model.NotaMusical import NotaMusical
+from .NotaMusical import NotaMusical
 
 @dataclass
 class TransicionMarkov:
