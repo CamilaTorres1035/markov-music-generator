@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from NotaMusical import NotaMusical
+from model.NotaMusical import NotaMusical
 
 @dataclass
 class EventoMusical:

@@ -1,4 +1,4 @@
-from TransicionMarkov import TransicionMarkov
+from model.TransicionMarkov import TransicionMarkov
 
 class MatrizMarkov:
     _matriz: dict[int, list[TransicionMarkov]]
