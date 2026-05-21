@@ -9,9 +9,9 @@ class OrquestadorMapReduce:
     _corpus: list[SecuenciaMusical]
     _client: Client
 
-    def __init__(self, corpus:list[SecuenciaMusical]):
+    def __init__(self, corpus:list[SecuenciaMusical], client:Client):
         self._corpus = corpus
-        self._client = Client(n_workers=4,dashboard_address=':5847')
+        self._client = client
         print(f"Dashboard: {self._client.dashboard_link}")
 
     def ejecutar_map_reduce(self, funcion_map:Callable, funcion_reduce:Callable, funcion_combine:Callable) -> list[DataTransicionAgrupada]:
@@ -47,8 +47,6 @@ class OrquestadorMapReduce:
         
         return resultado_transformado
     
-    def cerrar(self):
-        self._client.close()
 
 
 
