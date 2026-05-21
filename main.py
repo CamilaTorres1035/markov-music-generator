@@ -39,18 +39,17 @@ def main():
         print("No hay secuencias en el corpus. Finalizando.")
         return
     
-    client.close()
+    
 
     # 3. MapReduce
     print("\nIniciando MapReduce...")
-    orquestador = OrquestadorMapReduce(corpus=corpus)
-    resultado = orquestador.ejecutar_map_reduce(
+    orquestador = OrquestadorMapReduce(corpus=corpus, client=client)
+    resultado_transformado = orquestador.ejecutar_map_reduce(
         MarkovMapper.map_secuencia,
         MarkovReducer.funcion_reduce,
         MarkovReducer.funcion_combine
     )
-    resultado_transformado = orquestador.transformar_datos_agrupados(resultado)
-    orquestador.cerrar()
+
     print(f"MapReduce completado: {len(resultado_transformado)} estados encontrados")
 
     # 4. Generar matriz de Markov
@@ -77,6 +76,7 @@ def main():
         nombre_archivo="secuencia_generada"
     )
     print(f"Archivo guardado en: {ruta}")
+    client.close()
 
 
 if __name__ == "__main__":
