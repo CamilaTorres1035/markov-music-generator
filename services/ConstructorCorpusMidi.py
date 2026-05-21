@@ -20,7 +20,7 @@ class ConstructorCorpusMidi:
         print(f"  - Eventos: {len(secuencia._lista_eventos)}")
 
     def agregar_archivos(self, rutas: list[str]) -> None:
-        bag = db.from_sequence(rutas, npartitions=8)
+        bag = db.from_sequence(rutas, npartitions=64)
         secuencias = bag.map(ConstructorCorpusMidi._procesar_archivo_static).compute()
         self.corpus.extend(secuencias)
         print(f"✓ {len(secuencias)} archivos procesados")

@@ -6,7 +6,7 @@ from services.MarkovMapper import MarkovMapper
 from services.MarkovReducer import MarkovReducer
 from services.OrquestadorMapReduce import OrquestadorMapReduce
 from services.GeneradorMatrizMarkov import GeneradorMatrizMarkov
-from services.GeneradorProcedural import GeneradorProcedural
+from services.GeneradorProceduralSuavizado import GeneradorProceduralSuavizado
 from services.ExportadorMidi import ExportadorMidi
 from dask.distributed import Client
 
@@ -14,11 +14,11 @@ from dask.distributed import Client
 def main():
     # 1. Cargar archivos MIDI del directorio /data
     constructor = ConstructorCorpusMidi()
-    data_dir = Path("data/2004")
-    client = Client(n_workers=4, dashboard_address=':5847')
+    data_dir = Path("data")
+    client = Client(n_workers=os.cpu_count(), threads_per_worker= 1 , dashboard_address=':5847')
     print(client.dashboard_link)
 
-    midi_files = sorted(list(data_dir.glob("*.midi")) + list(data_dir.glob("*.mid")))
+    midi_files = sorted(list(data_dir.rglob("*.midi")) + list(data_dir.rglob("*.mid")))
     print(f"Encontrados {len(midi_files)} archivos MIDI")
 
     rutas = [str(f) for f in midi_files]
@@ -60,7 +60,7 @@ def main():
 
     # 5. Generar secuencia procedural
     print("\nGenerando secuencia musical...")
-    generador_procedural = GeneradorProcedural(matriz)
+    generador_procedural = GeneradorProceduralSuavizado(matriz)
     secuencia = generador_procedural.generar_secuencia(duracion_secuencia_ms=30000)
     
     print(f"Secuencia generada: {len(secuencia._lista_eventos)} eventos")
