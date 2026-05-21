@@ -48,7 +48,7 @@ class ConstructorCorpusMidi:
         secuencia = self._procesar_archivo(ruta)
         self.corpus.append(secuencia)
         print(f"✓ Archivo procesado: {ruta}")
-        print(f"  - Eventos: {len(secuencia._lista_notas)}")
+        print(f"  - Eventos: {len(secuencia._lista_eventos)}")
     
     def _procesar_archivo(self, ruta: str) -> SecuenciaMusical:
         """
@@ -57,9 +57,9 @@ class ConstructorCorpusMidi:
         Pipeline:
         1. Cargar archivo MIDI
         2. Extraer BPM y tonalidad original
-        3. Normalizar tonalidad
+        3. Calcular transposición (sin copiar partitura)
         4. Cuantizar ritmo
-        5. Filtrar y convertir a EventoMusical
+        5. Extraer eventos con transposición aplicada directamente a MIDI
         
         Args:
             ruta: ruta al archivo MIDI
@@ -87,14 +87,18 @@ class ConstructorCorpusMidi:
         bpm = self._get_bpm(score)
         original_key = self._get_key(score)
         
-        # Normalizar tonalidad
-        score = self._normalize_key(score, original_key)
+        # Calcular intervalo de transposición (sin transponer la partitura)
+        transposition_semitones = self._get_transposition_semitones(original_key)
         
         # Cuantizar ritmo
-        score = self._quantize_rhythm(score)
+        try:
+            score = self._quantize_rhythm(score)
+        except Exception:
+            # Si la cuantización falla, continuar sin ella
+            pass
         
-        # Extraer eventos
-        eventos = self._extraer_eventos(score, bpm)
+        # Extraer eventos (con transposición aplicada directamente a MIDI)
+        eventos = self._extraer_eventos(score, bpm, transposition_semitones)
         
         # Crear y retornar SecuenciaMusical
         return SecuenciaMusical(eventos)
@@ -121,7 +125,7 @@ class ConstructorCorpusMidi:
             dict con información de cantidad de secuencias y eventos
         """
         total_secuencias = len(self.corpus)
-        total_eventos = sum(len(seq._lista_notas) for seq in self.corpus)
+        total_eventos = sum(len(seq._lista_eventos) for seq in self.corpus)
         
         return {
             'total_secuencias': total_secuencias,
@@ -156,26 +160,38 @@ class ConstructorCorpusMidi:
             return key.Key('C')
     
     @staticmethod
-    def _normalize_key(score, original_key: key.Key):
+    def _get_transposition_semitones(original_key: key.Key) -> int:
         """
-        Transpone la partitura a Do Mayor (si es mayor) o La Menor (si es menor).
+        Calcula cuántos semitones se necesitan transponer.
         
-        Esto normaliza todas las canciones al mismo "idioma tonal".
+        Normaliza a Do Mayor (si es mayor) o La Menor (si es menor)
+        sin necesidad de copiar la partitura (mucho más eficiente).
+        
+        Args:
+            original_key: tonalidad original detectada
+            
+        Returns:
+            número de semitones a transponer (positivos o negativos)
         """
         # Determinar clave objetivo según modo
         if original_key.mode == 'major':
-            target_key = key.Key('C')
+            target_tonic = 0  # Do (semitono 0)
         else:
-            target_key = key.Key('a')
+            target_tonic = 9  # La (semitono 9)
         
-        # Calcular intervalo de transposición
-        transposition_interval = interval.Interval(
-            original_key.tonic,
-            target_key.tonic
-        )
+        # Obtener semitono de la tónica original (0-11)
+        original_semitone = original_key.tonic.pitchClass
         
-        # Transponer
-        return score.transpose(transposition_interval)
+        # Calcular intervalo en semitones
+        transposition = target_tonic - original_semitone
+        
+        # Normalizar a rango [-6, 6]
+        if transposition > 6:
+            transposition -= 12
+        elif transposition < -6:
+            transposition += 12
+        
+        return transposition
     
     @staticmethod
     def _quantize_rhythm(score):
@@ -186,15 +202,17 @@ class ConstructorCorpusMidi:
         """
         return score.quantize([4, 8, 16])
     
-    def _extraer_eventos(self, score, bpm: int) -> list[EventoMusical]:
+    def _extraer_eventos(self, score, bpm: int, transposition_semitones: int = 0) -> list[EventoMusical]:
         """
         Extrae notas, acordes y silencios de la partitura.
         
         Convierte a duraciones en milisegundos, aplica filtros y crea EventoMusical.
+        Aplica transposición directamente a los números MIDI (eficiente, sin deepcopy).
         
         Args:
-            score: partitura normalizada y cuantizada
+            score: partitura cuantizada
             bpm: tempo en beats por minuto
+            transposition_semitones: semitones a transponer
             
         Returns:
             list[EventoMusical] con eventos filtrados y convertidos
@@ -210,27 +228,33 @@ class ConstructorCorpusMidi:
             if not self._is_valid_duration(duration_ms):
                 continue
             
-            # Convertir ms a float (suponiendo que EventoMusical._duracion es en milisegundos)
+            # Convertir ms a float
             duration_float = float(duration_ms)
             
-            # Extraer la nota (resolviendo acordes y silencios)
-            if el.isNote:
-                # Nota simple
-                nota = NotaMusical(el.pitch.midi)
-                evento = EventoMusical(nota, duration_float)
-                eventos.append(evento)
-                
-            elif el.isChord:
-                # Acorde: tomar la nota más aguda (soprano)
-                nota = NotaMusical(el[-1].pitch.midi)
-                evento = EventoMusical(nota, duration_float)
-                eventos.append(evento)
-                
-            elif el.isRest:
-                # Silencio representado como nota MIDI -1
-                nota = NotaMusical(-1)
-                evento = EventoMusical(nota, duration_float)
-                eventos.append(evento)
+            # Extraer la nota con transposición aplicada
+            try:
+                if el.isNote:
+                    # Nota simple: aplicar transposición
+                    nota_midi = el.pitch.midi + transposition_semitones
+                    nota = NotaMusical(nota_midi)
+                    evento = EventoMusical(nota, duration_float)
+                    eventos.append(evento)
+                    
+                elif el.isChord:
+                    # Acorde: tomar la nota más grave (bajo) con transposición
+                    nota_midi = min(p.midi for p in el.pitches) + transposition_semitones
+                    nota = NotaMusical(nota_midi)
+                    evento = EventoMusical(nota, duration_float)
+                    eventos.append(evento)
+                    
+                elif el.isRest:
+                    # Silencio representado como nota MIDI -1
+                    nota = NotaMusical(-1)
+                    evento = EventoMusical(nota, duration_float)
+                    eventos.append(evento)
+            except Exception:
+                # Saltar elementos problemáticos
+                continue
         
         return eventos
     

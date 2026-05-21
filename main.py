@@ -1,166 +1,73 @@
-"""
-# main.py
-from model.EventoMusical import EventoMusical
-from model.NotaMusical import NotaMusical
-from model.SecuenciaMusical import SecuenciaMusical
-from model.TransicionMarkov import TransicionMarkov
-from model.MatrizMarkov import MatrizMarkov
-from services.MarkovMapper import MarkovMapper
-from services.MarkovReducer import MarkovReducer
-from services.OrquestadorMapReduce import OrquestadorMapReduce
+import os
+from pathlib import Path
 
-def main():
-    # 2. Creación de los datos de prueba (Mocking)
-    # Notas MIDI: 60 (Do), 62 (Re), 64 (Mi), 65 (Fa), 67 (Sol)
-    lista_eventos_prueba = [
-        EventoMusical(NotaMusical(60), 0.5),
-        EventoMusical(NotaMusical(62), 0.5),
-        EventoMusical(NotaMusical(64), 1.0),
-        EventoMusical(NotaMusical(65), 0.25),
-        EventoMusical(NotaMusical(67), 2.0)
-    ]
-
-    lista_eventos_prueba2 = [
-        EventoMusical(NotaMusical(60), 0.5),
-        EventoMusical(NotaMusical(62), 0.5),
-        EventoMusical(NotaMusical(64), 1.0),
-        EventoMusical(NotaMusical(65), 0.25),
-        EventoMusical(NotaMusical(67), 2.0)
-    ]
-
-    # 3. Empaquetando en la Secuencia (opcional, por si el mapper lo exige así)
-    secuencia_prueba = SecuenciaMusical(lista_eventos_prueba)
-    secuencia_prueba2 = SecuenciaMusical(lista_eventos_prueba2)
-
-    corpus = [secuencia_prueba, secuencia_prueba2]
-
-    orquestador = OrquestadorMapReduce(corpus=corpus)
-    lista = orquestador.ejecutar_map_reduce(MarkovMapper.map_secuencia, MarkovReducer.funcion_reduce, MarkovReducer.funcion_combine)
-    cerrar = input("E")
-    if cerrar == "ESCRIBA E PARA CERRAR CLUSTER":
-        orquestador.cerrar() 
-    print(lista)
-
-
-
-if __name__ == "__main__":
-    main()
-
-"""
-import random
-
-from model.NotaMusical import NotaMusical
-from model.EventoMusical import EventoMusical
-from model.SecuenciaMusical import SecuenciaMusical
-
+from services.ConstructorCorpusMidi import ConstructorCorpusMidi
 from services.MarkovMapper import MarkovMapper
 from services.MarkovReducer import MarkovReducer
 from services.OrquestadorMapReduce import OrquestadorMapReduce
 
 
-def generar_secuencia_aleatoria(
-    longitud: int,
-    rango_notas: tuple[int, int],
-    duraciones_posibles: list[float]
-) -> SecuenciaMusical:
-
-    eventos = []
-
-    for _ in range(longitud):
-
-        nota_midi = random.randint(
-            rango_notas[0],
-            rango_notas[1]
-        )
-
-        duracion = random.choice(
-            duraciones_posibles
-        )
-
-        nota = NotaMusical(nota_midi)
-
-        evento = EventoMusical(
-            nota,
-            duracion
-        )
-
-        eventos.append(evento)
-
-    return SecuenciaMusical(eventos)
-
-
-def generar_corpus_aleatorio(
-    cantidad_secuencias: int,
-    longitud_minima: int,
-    longitud_maxima: int
-) -> list[SecuenciaMusical]:
-
-    corpus = []
-
-    for _ in range(cantidad_secuencias):
-
-        longitud = random.randint(
-            longitud_minima,
-            longitud_maxima
-        )
-
-        secuencia = generar_secuencia_aleatoria(
-            longitud=longitud,
-            rango_notas=(60, 72),
-            duraciones_posibles=[
-                0.25,
-                0.5,
-                1.0,
-                2.0
-            ]
-        )
-
-        corpus.append(secuencia)
-
-    return corpus
-
-
 def main():
-
-    random.seed(42)
-
-    corpus = generar_corpus_aleatorio(
-        cantidad_secuencias=20,
-        longitud_minima=8,
-        longitud_maxima=20
-    )
-
-    print("Corpus generado:")
-    print(f"Cantidad de secuencias: {len(corpus)}")
+    # 1. Cargar archivos MIDI del directorio /data
+    constructor = ConstructorCorpusMidi()
+    data_dir = Path("data")
+    
+    # Cargar todos los archivos MIDI
+    midi_files = sorted(list(data_dir.rglob("*.midi")) + list(data_dir.rglob("*.mid")))
+    
+    print(f"Encontrados {len(midi_files)} archivos MIDI")
     print()
-
-    orquestador = OrquestadorMapReduce(
-        corpus=corpus
-    )
-
+    
+    # Procesar todos los archivos MIDI
+    errores = 0
+    for i, midi_file in enumerate(midi_files, 1):
+        try:
+            constructor.agregar_archivo(str(midi_file))
+        except Exception as e:
+            errores += 1
+            print(f"✗ Error en {midi_file}: {str(e)[:80]}")
+    
+    print(f"\nProcesamiento completado: {len(midi_files) - errores}/{len(midi_files)} archivos exitosos")
+    
+    print()
+    
+    # 2. Obtener corpus procesado
+    corpus = constructor.obtener_corpus()
+    stats = constructor.obtener_estadisticas()
+    
+    print(f"Estadísticas del corpus:")
+    print(f"  - Secuencias: {stats['total_secuencias']}")
+    print(f"  - Total eventos: {stats['total_eventos']}")
+    print(f"  - Promedio por secuencia: {stats['promedio_eventos_por_secuencia']:.2f}")
+    print()
+    
+    if stats['total_secuencias'] == 0:
+        print("No hay secuencias en el corpus. Finalizando.")
+        return
+    
+    # 3. Procesar con MapReduce
+    print("Iniciando MapReduce...")
+    orquestador = OrquestadorMapReduce(corpus=corpus)
     resultado = orquestador.ejecutar_map_reduce(
         MarkovMapper.map_secuencia,
         MarkovReducer.funcion_reduce,
         MarkovReducer.funcion_combine
     )
-    input("A")
+    
+    print("Procesamiento completado. Presiona ENTER para cerrar...")
+    input()
     orquestador.cerrar()
-
-    print("Resultado del MapReduce:")
-    print()
-
+    
+    print("\nMatriz de Transiciones Markov:")
+    print("=" * 60)
     for data in resultado:
-
         print(f"Nota origen: {data._nota_origen}")
-
         for nota_destino, estadisticas in data._transiciones.items():
-
             print(
                 f"  -> {nota_destino} | "
                 f"conteo={estadisticas._conteo} | "
                 f"tiempos={estadisticas._tiempos}"
             )
-
         print()
 
 
