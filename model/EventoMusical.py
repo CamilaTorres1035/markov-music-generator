@@ -4,4 +4,4 @@ from .NotaMusical import NotaMusical
 @dataclass
 class EventoMusical:
     _nota: NotaMusical
-    _duracion: float
+    _duracion: int
