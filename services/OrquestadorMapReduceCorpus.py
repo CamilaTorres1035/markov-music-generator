@@ -1,6 +1,5 @@
 from dask.distributed import Client
 from services.MapReduceCorpus import MapReduceCorpus
-from services.ConstructorCorpusMidi import ConstructorCorpusMidi
 
 
 class OrquestadorMapReduceCorpus:
@@ -14,7 +13,7 @@ class OrquestadorMapReduceCorpus:
         self._rutas = rutas
         self._client = client
 
-    def procesar_y_reducir(self, fn_reduce, fn_combine):
+    def procesar_y_reducir(self, funcion_extractor, fn_reduce, fn_combine):
         """Procesa archivos MIDI aplicando map-reduce completo.
 
         Args:
@@ -28,7 +27,7 @@ class OrquestadorMapReduceCorpus:
 
         # Map: archivo → tuplas, Reduce: agrupa tuplas por nota
         tuplas_reducidas = orquestador.ejecutar(
-            fn_map=ConstructorCorpusMidi._extraer_tuplas_archivo,
+            fn_map=funcion_extractor,
             fn_reduce=fn_reduce,
             fn_combine=fn_combine,
             flatten=True

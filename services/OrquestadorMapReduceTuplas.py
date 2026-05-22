@@ -1,6 +1,7 @@
 import dask.bag as db
 from dask.distributed import Client
 from dto.DataTransicionAgrupada import DataTransicionAgrupada
+from services.TransformadorTransiciones import TransformadorTransiciones
 
 
 class OrquestadorMapReduceTuplas:
@@ -38,22 +39,5 @@ class OrquestadorMapReduceTuplas:
         )
 
         resultado = agrupado.compute()
-        resultado_transformado = self._transformar_datos_agrupados(resultado)
-        return resultado_transformado
-
-    @staticmethod
-    def _transformar_datos_agrupados(resultado: list[tuple[int, dict]]) -> list[DataTransicionAgrupada]:
-        """Transforma resultado de foldby a DTOs DataTransicionAgrupada."""
-        from dto.EstadisticasDeTransicion import EstadisticasDeTransicion
-
-        resultado_transformado = []
-        for tupla in resultado:
-            nota_origen, transiciones = tupla
-            aux = {}
-            for clave_destino, informacion in transiciones.items():
-                dto = EstadisticasDeTransicion(informacion["frecuencia"], informacion["tiempos"])
-                aux[clave_destino] = dto
-
-            resultado_transformado.append(DataTransicionAgrupada(nota_origen, aux))
-
+        resultado_transformado = TransformadorTransiciones.a_dtos(resultado)
         return resultado_transformado

@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
 
+from services.ConstructorCorpusMidi import ConstructorCorpusMidi
 from services.MarkovReducer import MarkovReducer
 from services.OrquestadorMapReduceCorpus import OrquestadorMapReduceCorpus
 from services.GeneradorMatrizMarkov import GeneradorMatrizMarkov
 from services.GeneradorProceduralSuavizado import GeneradorProceduralSuavizado
 from services.ExportadorMidi import ExportadorMidi
-from dto.DataTransicionAgrupada import DataTransicionAgrupada
-from dto.EstadisticasDeTransicion import EstadisticasDeTransicion
+from services.TransformadorTransiciones import TransformadorTransiciones
 from dask.distributed import Client
 
 
@@ -26,6 +26,7 @@ def main():
     print("\nProcesando archivos MIDI con map-reduce...")
     orquestador_corpus = OrquestadorMapReduceCorpus(rutas=rutas, client=client)
     tuplas_reducidas = orquestador_corpus.procesar_y_reducir(
+        funcion_extractor=ConstructorCorpusMidi._extraer_tuplas_archivo,
         fn_reduce=MarkovReducer.funcion_reduce,
         fn_combine=MarkovReducer.funcion_combine
     )
@@ -35,7 +36,7 @@ def main():
 
     # 3. Transformar tuplas reducidas a DataTransicionAgrupada
     print("\nTransformando tuplas a estructura de matriz...")
-    resultado_transformado = _transformar_tuplas_a_dto(tuplas_reducidas)
+    resultado_transformado = TransformadorTransiciones.a_dtos(tuplas_reducidas)
 
     print(f"Transiciones agrupadas: {len(resultado_transformado)} estados encontrados")
 
@@ -64,21 +65,6 @@ def main():
     )
     print(f"Archivo guardado en: {ruta}")
     client.close()
-
-
-def _transformar_tuplas_a_dto(tuplas_reducidas: list[tuple]) -> list[DataTransicionAgrupada]:
-    """Transforma tuplas reducidas (nota_origen, dict_transiciones) a DTOs."""
-    resultado_transformado = []
-    for tupla in tuplas_reducidas:
-        nota_origen, transiciones = tupla
-        aux = {}
-        for clave_destino, informacion in transiciones.items():
-            dto = EstadisticasDeTransicion(informacion["frecuencia"], informacion["tiempos"])
-            aux[clave_destino] = dto
-
-        resultado_transformado.append(DataTransicionAgrupada(nota_origen, aux))
-
-    return resultado_transformado
 
 if __name__ == "__main__":
     main()

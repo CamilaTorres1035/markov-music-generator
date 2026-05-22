@@ -2,8 +2,8 @@ from model.SecuenciaMusical import SecuenciaMusical
 from typing import Callable
 import dask.bag as db
 from dto.DataTransicionAgrupada import DataTransicionAgrupada
-from dto.EstadisticasDeTransicion import EstadisticasDeTransicion
 from dask.distributed import Client
+from services.TransformadorTransiciones import TransformadorTransiciones
 
 class OrquestadorMapReduce:
     _corpus: list[SecuenciaMusical]
@@ -30,21 +30,7 @@ class OrquestadorMapReduce:
 
         ##Paso 4: ejecutar MapReduce
         resultado = agrupado.compute()
-        resultado_transformado = self.transformar_datos_agrupados(resultado)
-        return resultado_transformado
-    
-    def transformar_datos_agrupados(self, resultado:list[tuple[int, dict]]) -> list[DataTransicionAgrupada]:
-        ##Recorre el resultado y crea la lista con dto's trasnformada
-        resultado_transformado = []
-        for tupla in resultado:
-            nota_origen, transiciones = tupla
-            aux = {}
-            for clave_destino, informacion in transiciones.items():
-                dto = EstadisticasDeTransicion(informacion["frecuencia"], informacion["tiempos"])
-                aux[clave_destino] = dto
-            
-            resultado_transformado.append(DataTransicionAgrupada(nota_origen, aux))
-        
+        resultado_transformado = TransformadorTransiciones.a_dtos(resultado)
         return resultado_transformado
     
 
