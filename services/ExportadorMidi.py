@@ -46,7 +46,7 @@ class ExportadorMidi:
         """
         
         # Validar entrada
-        if not secuencia._lista_notas:
+        if not secuencia._lista_eventos:
             raise ValueError("No se puede exportar una secuencia vacía")
         
         # Validar y crear directorio
@@ -97,8 +97,8 @@ class ExportadorMidi:
         part.append(meter.TimeSignature(f'{parte_numerador}/{parte_denominador}'))
         
         # Agregar eventos
-        for evento in secuencia._lista_notas:
-            nota_midi = evento._nota._nota
+        for evento in secuencia._lista_eventos:
+            nota_midi = evento._nota._nota_midi
             duracion_ms = evento._duracion
             
             # Convertir ms a quarter length (4 quarter notes = 1 minuto a 120 BPM)
