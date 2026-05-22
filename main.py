@@ -14,16 +14,26 @@ from dask.distributed import Client
 def main():
     # 1. Cargar archivos MIDI del directorio /data
     data_dir = Path("data")
+
+    # Creamos un cluster (Client) local con dask
     client = Client(n_workers=os.cpu_count(), threads_per_worker=1, dashboard_address=':5847')
     print(client.dashboard_link)
 
+    # Creamos una lista con los archivos .midi o .mid
     midi_files = sorted(list(data_dir.rglob("*.midi")) + list(data_dir.rglob("*.mid")))
     print(f"Encontrados {len(midi_files)} archivos MIDI")
 
-    rutas = [str(f) for f in midi_files]
+    rutas = [str(f) for f in midi_files] #La misma lista se reconvierte a cadenas de texto
 
     # 2. Procesar archivos con map-reduce completo
     print("\nProcesando archivos MIDI con map-reduce...")
+
+    """
+        Instanciamos un objeto de la clase orquestadora del corpus.
+        En este punto, se realizan las trasnformaciones en el orden:
+        Map: archivo MIDI → lista de tuplas (nota_origen, nota_destino, duracion) 
+        Reduce: agrupa tuplas por frecuencia
+    """
     orquestador_corpus = OrquestadorMapReduceCorpus(rutas=rutas, client=client)
     tuplas_reducidas = orquestador_corpus.procesar_y_reducir(
         funcion_extractor=ConstructorCorpusMidi._extraer_tuplas_archivo,

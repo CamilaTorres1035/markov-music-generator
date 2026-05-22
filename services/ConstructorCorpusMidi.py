@@ -1,46 +1,45 @@
 from music21 import converter, key
 from pathlib import Path
-from model.NotaMusical import NotaMusical
-from model.EventoMusical import EventoMusical
-from model.SecuenciaMusical import SecuenciaMusical
-import dask.bag as db
+
+
+"""
+Módulo para extraer transiciones musicales de archivos MIDI.
+
+Proporciona utilidades para procesar archivos MIDI y extraer tuplas de transiciones
+en formato (nota_origen, nota_destino, duracion_destino) para usar en cadenas de Markov.
+"""
 
 
 class ConstructorCorpusMidi:
+    """
+    Clase de utilidad para extraer transiciones musicales de archivos MIDI.
+    
+    Proporciona métodos estáticos para procesar archivos MIDI, normalizar tonalidades,
+    extraer eventos musicales y convertirlos en transiciones para modelos de Markov.
+    """
+    
     MIN_DURATION_MS = 50
     MAX_DURATION_MS = 4000
 
-    def __init__(self):
-        self.corpus: list[SecuenciaMusical] = []
-
-    def agregar_archivo(self, ruta: str) -> None:
-        secuencia = self._procesar_archivo(ruta)
-        self.corpus.append(secuencia)
-        print(f"✓ Archivo procesado: {ruta}")
-        print(f"  - Eventos: {len(secuencia._lista_eventos)}")
-
-    def agregar_archivos(self, rutas: list[str]) -> None:
-        bag = db.from_sequence(rutas, npartitions=64)
-        secuencias = bag.map(ConstructorCorpusMidi._procesar_archivo_static).compute()
-        self.corpus.extend(secuencias)
-        print(f"✓ {len(secuencias)} archivos procesados")
-
-    def _procesar_archivo(self, ruta: str) -> SecuenciaMusical:
-        tuplas = ConstructorCorpusMidi._extraer_tuplas_archivo(ruta)
-        return ConstructorCorpusMidi._ensamblar_secuencia(tuplas)
-
-    @staticmethod
-    def _procesar_archivo_static(ruta: str) -> SecuenciaMusical:
-        tuplas = ConstructorCorpusMidi._extraer_tuplas_archivo(ruta)
-        return ConstructorCorpusMidi._ensamblar_secuencia(tuplas)
-
     @staticmethod
     def _extraer_tuplas_archivo(ruta: str) -> list[tuple[int, int, float]]:
-        """Extrae tuplas de transiciones (nota_origen, nota_destino, duracion_destino) desde un archivo MIDI.
-        Pensado para usarse en pipelines de Dask con datos primitivos para Markov."""
-        from music21 import converter
-        from pathlib import Path
-
+        """
+        Extrae tuplas de transiciones desde un archivo MIDI.
+        
+        Carga un archivo MIDI, normaliza su tonalidad, extrae eventos musicales
+        y los convierte en tuplas de transiciones (nota_origen, nota_destino, duracion_destino).
+        
+        Args:
+            ruta: Ruta al archivo MIDI a procesar.
+            
+        Returns:
+            Lista de tuplas (nota_origen, nota_destino, duracion_destino) donde
+            nota_origen y nota_destino son valores MIDI y duracion_destino es milisegundos.
+            
+        Raises:
+            FileNotFoundError: Si el archivo MIDI no existe.
+            Exception: Si hay error al procesar el archivo MIDI.
+        """
         path = Path(ruta)
         if not path.exists():
             raise FileNotFoundError(f"Archivo MIDI no encontrado: {ruta}")
@@ -58,31 +57,19 @@ class ConstructorCorpusMidi:
         return ConstructorCorpusMidi._convertir_eventos_a_transiciones(eventos)
 
     @staticmethod
-    def _ensamblar_secuencia(tuplas: list[tuple[int, float]]) -> SecuenciaMusical:
-        """Ensambla una SecuenciaMusical a partir de tuplas crudas.
-        Se ejecuta fuera del contexto de Dask."""
-        eventos = [EventoMusical(NotaMusical(nota_midi), duracion) for nota_midi, duracion in tuplas]
-        return SecuenciaMusical(eventos)
-
-    def obtener_corpus(self) -> list[SecuenciaMusical]:
-        return self.corpus
-
-    def limpiar_corpus(self) -> None:
-        self.corpus = []
-        print("✓ Corpus limpiado")
-
-    def obtener_estadisticas(self) -> dict:
-        total_secuencias = len(self.corpus)
-        total_eventos = sum(len(seq._lista_eventos) for seq in self.corpus)
-
-        return {
-            'total_secuencias': total_secuencias,
-            'total_eventos': total_eventos,
-            'promedio_eventos_por_secuencia': total_eventos / total_secuencias if total_secuencias > 0 else 0
-        }
-
-    @staticmethod
     def _get_bpm(score) -> int:
+        """
+        Extrae el tempo (BPM) de una partitura MIDI.
+        
+        Busca marcas de metrónomo en la partitura. Si no las encuentra,
+        retorna 120 BPM como valor por defecto.
+        
+        Args:
+            score: Partitura music21 a procesar.
+            
+        Returns:
+            Tempo en BPM.
+        """
         tempos = score.flatten().getElementsByClass('MetronomeMark')
         if tempos:
             return int(tempos[0].number)
@@ -90,6 +77,18 @@ class ConstructorCorpusMidi:
 
     @staticmethod
     def _get_key(score):
+        """
+        Analiza la tonalidad de una partitura MIDI.
+        
+        Intenta detectar la tonalidad automáticamente. Si falla,
+        retorna Do Mayor como tonalidad por defecto.
+        
+        Args:
+            score: Partitura music21 a procesar.
+            
+        Returns:
+            Objeto Key de music21 representando la tonalidad.
+        """
         try:
             return score.analyze('key')
         except:
@@ -97,6 +96,18 @@ class ConstructorCorpusMidi:
 
     @staticmethod
     def _get_transposition_semitones(original_key) -> int:
+        """
+        Calcula los semitonos necesarios para transponer a Do Mayor o La Menor.
+        
+        Normaliza la tonalidad al rango Do Mayor (0) o La Menor (9) para
+        estandarizar los valores MIDI entre archivos con diferentes tonalidades.
+        
+        Args:
+            original_key: Tonalidad original de la partitura.
+            
+        Returns:
+            Número de semitonos para transponer (positivo o negativo).
+        """
         if original_key.mode == 'major':
             target_tonic = 0
         else:
@@ -113,11 +124,24 @@ class ConstructorCorpusMidi:
         return transposition
 
     @staticmethod
-    def _quantize_rhythm(score):
-        return score.quantize([4, 8, 16])
-
-    @staticmethod
     def _extraer_tuplas_eventos_static(score, bpm: int, transposition_semitones: int = 0) -> list[tuple[int, float]]:
+        """
+        Extrae eventos musicales de una partitura.
+        
+        Convierte notas, acordes y silencios de una partitura en tuplas
+        (nota_midi, duracion_ms), aplicando transposición y cuantización
+        de duraciones a una resolución de 50ms.
+        
+        Args:
+            score: Partitura music21 a procesar.
+            bpm: Tempo de la partitura en BPM.
+            transposition_semitones: Semitonos a transponer (por defecto 0).
+            
+        Returns:
+            Lista de tuplas (nota_midi, duracion_ms) donde nota_midi es el
+            número MIDI (rango 0-127) o -1 para silencios, y duracion_ms
+            está cuantizada en pasos de 50ms entre MIN_DURATION_MS y MAX_DURATION_MS.
+        """
         tuplas = []
         elementos = score.flatten().notesAndRests
         resolucion_ms = 50
@@ -147,14 +171,21 @@ class ConstructorCorpusMidi:
 
     @staticmethod
     def _convertir_eventos_a_transiciones(eventos: list[tuple[int, float]]) -> list[tuple[int, int, float]]:
-        """Convierte lista de eventos en transiciones (nota_origen, nota_destino, duracion_destino)."""
+        """
+        Convierte una secuencia de eventos en transiciones entre eventos consecutivos.
+        
+        Cada transición contiene la nota de origen, la nota de destino y la duración
+        de la nota de destino, en el formato esperado por modelos de Markov.
+        
+        Args:
+            eventos: Lista de tuplas (nota_midi, duracion_ms).
+            
+        Returns:
+            Lista de tuplas (nota_origen, nota_destino, duracion_destino).
+        """
         transiciones = []
         for i in range(len(eventos) - 1):
             nota_origen, _ = eventos[i]
             nota_destino, duracion_destino = eventos[i + 1]
             transiciones.append((nota_origen, nota_destino, duracion_destino))
         return transiciones
-
-    @staticmethod
-    def _calculate_duration_ms(quarter_length: float, bpm: int) -> int:
-        return int(quarter_length * (60000 / bpm))
