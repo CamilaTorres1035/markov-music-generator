@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from model.SecuenciaMusical import SecuenciaMusical
 from services.ConstructorCorpusMidi import ConstructorCorpusMidi
 from services.MarkovReducer import MarkovReducer
 from services.OrquestadorMapReduceCorpus import OrquestadorMapReduceCorpus
@@ -56,10 +57,29 @@ def main():
     matriz = generador_matriz.generar_matriz()
     print(f"Matriz generada con {len(matriz._estados)} estados")
 
-    # 5. Generar secuencia procedural
-    print("\nGenerando secuencia musical...")
+    # 5. Generar secuencias cortas (Frases de 4 segundos)
+    print("\nGenerando frases musicales...")
     generador_procedural = GeneradorProceduralSuavizado(matriz)
-    secuencia = generador_procedural.generar_secuencia(duracion_secuencia_ms=30000)
+    frase_A = generador_procedural.generar_secuencia(duracion_secuencia_ms=4000)
+    frase_B = generador_procedural.generar_secuencia(duracion_secuencia_ms=4000)
+    frase_C = generador_procedural.generar_secuencia(duracion_secuencia_ms=4000)
+    # 7. REPETICIÓN INTELIGENTE (Estructura A - A - B - A)
+    # eventos_completos = (
+    #    frase_A._lista_eventos + 
+    #    frase_A._lista_eventos + 
+    #    frase_B._lista_eventos + 
+    #    frase_A._lista_eventos
+    #)
+    # (Estructura A - A - B - A)
+    eventos_completos = (
+        frase_A._lista_eventos + 
+        frase_B._lista_eventos + 
+        frase_A._lista_eventos + 
+        frase_C._lista_eventos +
+        frase_A._lista_eventos
+    )
+
+    secuencia = SecuenciaMusical(eventos_completos)
 
     print(f"Secuencia generada: {len(secuencia._lista_eventos)} eventos")
     for evento in secuencia._lista_eventos:
