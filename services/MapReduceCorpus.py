@@ -89,7 +89,7 @@ class MapReduceCorpus:
             None y la otra no, se omite la reducción y se retornan las
             tuplas aplanadas sin agrupar.
         """
-        bag_inicial = db.from_sequence(self._items, npartitions=len(self._items))
+        bag_inicial = db.from_sequence(self._items, npartitions=32)
         bag_mapeado = bag_inicial.map(fn_map)
 
         if flatten:
