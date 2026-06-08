@@ -5,6 +5,7 @@ Reconstruye una partitura music21 a partir de eventos y la guarda en formato MID
 """
 
 from pathlib import Path
+import random
 from music21 import stream, note, tempo, meter
 from model.SecuenciaMusical import SecuenciaMusical
 
@@ -96,15 +97,36 @@ class ExportadorMidi:
         parte_numerador, parte_denominador = ExportadorMidi.FIRMA_DEFECTO
         part.append(meter.TimeSignature(f'{parte_numerador}/{parte_denominador}'))
         
-        # Agregar eventos
+        # POST-PROCESADO: Fusión de notas y filtro de ruido <---
+        eventos_limpios = []
         for evento in secuencia._lista_eventos:
+            if evento._duracion < 50: 
+                continue # Eliminar ruido/notas fantasma
+                
+            # Si es la misma nota que la anterior, sumamos duración en vez de re-tocarla
+            if eventos_limpios and eventos_limpios[-1]._nota._nota_midi == evento._nota._nota_midi:
+                eventos_limpios[-1]._duracion += evento._duracion
+            else:
+                eventos_limpios.append(evento)
+
+        tiempo_acumulado_ms = 0
+        # Agregar eventos
+        for evento in eventos_limpios:
             nota_midi = evento._nota._nota_midi
             duracion_ms = evento._duracion
             
-            # Convertir ms a quarter length (4 quarter notes = 1 minuto a 120 BPM)
-            # 1 quarter note = 500ms a 120 BPM
-            quarter_length = duracion_ms / 500.0
+            # VELOCITY (Acentos en los beats fuertes) <---
+            beat_actual = int(tiempo_acumulado_ms / 500) % 4 # Asumiendo 1 beat = 500ms
+            if beat_actual == 0:
+                evento._velocidad = 90 # Fuerte en el beat 1
+            else:
+                evento._velocidad = 50 + random.randint(-10, 10) # Humanizado en débiles
             
+            # HUMANIZACIÓN (Imperfección rítmica) <---
+            # Mutamos ligeramente la duración real escrita en el MIDI
+            duracion_humana = duracion_ms * random.uniform(0.9, 1.1)
+            quarter_length = duracion_humana/ 500.0
+
             if nota_midi == -1:
                 # Silencio
                 rest = note.Rest(quarterLength=quarter_length)
@@ -113,12 +135,14 @@ class ExportadorMidi:
                 # Nota válida
                 try:
                     n = note.Note(nota_midi, quarterLength=quarter_length)
+                    n.volume.velocity = evento._velocidad
                     part.append(n)
                 except:
                     # Si hay error, crear silencio
                     rest = note.Rest(quarterLength=quarter_length)
                     part.append(rest)
-        
+            tiempo_acumulado_ms += duracion_ms
+
         # Agregar part a score
         score.append(part)
         

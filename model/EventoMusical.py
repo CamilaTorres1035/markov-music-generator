@@ -18,3 +18,4 @@ class EventoMusical:
     """
     _nota: NotaMusical
     _duracion: int
+    _velocidad: int = 60         # Añadido: Volumen (0-127)

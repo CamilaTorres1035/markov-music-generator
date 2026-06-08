@@ -81,7 +81,19 @@ class GeneradorProceduralSuavizado:
             )
 
         duracion = 0
+        repeticiones = 0
+        nota_anterior_valida = nota_inicial
+        indice_acorde = 0
+        duracion_compas = 2000 # 4 beats a 500ms
+        duracion_acumulada_compas = 0
 
+        ESCALA_MAYOR = [0, 2, 4, 5, 7, 9, 11]  # Notas de la escala de Do Mayor
+        PROGRESION = [ # Definimos la progresión
+                [0, 4, 7],   # C mayor (Do, Mi, Sol)
+                [7, 11, 2],  # G mayor (Sol, Si, Re)
+                [9, 0, 4],   # A menor (La, Do, Mi)
+                [5, 9, 0]    # F mayor (Fa, La, Do)
+                ]
         while duracion < duracion_secuencia_ms:
 
             transiciones = self._matriz_markov.obtener_transiciones(
@@ -102,6 +114,44 @@ class GeneradorProceduralSuavizado:
             tiempo_escogido = self.seleccionar_duracion(
                 transicion_escogida._lista_tiempos
             )
+            grid_ms = 125
+            tiempo_escogido = max(grid_ms, round(tiempo_escogido/grid_ms)*grid_ms)
+
+            nota_cruda = transicion_escogida._nota_destino._nota_midi
+            if nota_cruda == -1:
+                # Si Markov pidió un silencio larguísimo, lo cortamos a un beat (500ms)
+                tiempo_escogido = min(tiempo_escogido, 500)
+            # Si es un silencio (-1), lo pasamos directo 
+            if nota_cruda != -1:
+                # Anti Repetición
+                if nota_cruda == nota_anterior_valida:
+                    repeticiones +=1
+                    if repeticiones > 2:
+                        # Si se repite 3 veces, saltamos una tercera (4 semitonos)
+                        nota_cruda += random.choice([-4, 4])
+                else:
+                    repeticiones = 0
+                # Limitar Saltos
+                if nota_anterior_valida != -1 and abs(nota_cruda-nota_anterior_valida)>7:
+                    nota_cruda = nota_anterior_valida + (7 if nota_cruda > nota_anterior_valida else -7)
+                beat_actual = int(duracion_acumulada_compas/500) % 4
+                if beat_actual in [0, 2]:
+                    conjunto_notas_permitidas = PROGRESION[indice_acorde]
+                else:
+                    conjunto_notas_permitidas = ESCALA_MAYOR
+                # Cuantización a acorde/escala
+                octava = nota_cruda//12
+                pc = nota_cruda%12
+                # encuetra nota del acorde más cercana matemáticamente
+                closest_pc = min(conjunto_notas_permitidas, key=lambda x: abs(x-pc))
+                nota_filtrada = octava*12+closest_pc
+
+                nota_filtrada = max(48, min(nota_filtrada, 84))
+                
+                nota_anterior_valida = nota_filtrada
+            else:
+                nota_filtrada = -1 
+
 
             # Caso especial: primera nota
             if duracion == 0:
@@ -110,9 +160,15 @@ class GeneradorProceduralSuavizado:
                     transicion_escogida._lista_tiempos
                 )
 
+                # Cuantizar la nota inicial antes de guardarla
+                octava_ini = nota_inicial // 12
+                pc_ini = nota_inicial % 12
+                closest_pc_ini = min(PROGRESION[indice_acorde], key=lambda x: abs(x - pc_ini))
+                nota_inicial_filtrada = octava_ini * 12 + closest_pc_ini
+
                 melodia.append(
                     EventoMusical(
-                        NotaMusical(nota_inicial),
+                        NotaMusical(nota_inicial_filtrada),
                         duracion_nota_inicial
                     )
                 )
@@ -123,14 +179,19 @@ class GeneradorProceduralSuavizado:
             melodia.append(
                 EventoMusical(
                     NotaMusical(
-                        transicion_escogida._nota_destino._nota_midi
+                        nota_filtrada
                     ),
                     tiempo_escogido
                 )
             )
 
-            # Actualizar duración total
+            # RITMO (Cambio de acorde al pasar el compás)
             duracion += tiempo_escogido
+            duracion_acumulada_compas += tiempo_escogido
+            if duracion_acumulada_compas >= duracion_compas:
+                duracion_acumulada_compas = 0
+                indice_acorde = (indice_acorde + 1) % len(PROGRESION)
+
 
             # Actualizar estado actual
             nota_inicial = (
@@ -180,7 +241,9 @@ class GeneradorProceduralSuavizado:
                 continue
 
             # Limitar saltos melódicos a una octava (12 semitonos)
-            if abs(nota_destino - nota_actual) <= 12:
+            # Si venimos de un silencio (nota_actual == -1), 
+            # permitimos empezar en cualquier nota real sin medir distancia.
+            if nota_actual == -1 or abs(nota_destino - nota_actual) <= 12:
                 transiciones_filtradas.append(t)
 
         # Si todo fue filtrado, usar originales
